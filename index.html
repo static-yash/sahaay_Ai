@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Solarpunk AI — Bioluminescent Voice Interface</title>
+<meta name="description" content="A real-time AI voice and text chatbot with a Solarpunk Glass & Bioluminescent Flora aesthetic." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Plus+Jakarta+Sans:wght@300;400;500;600&family=Caveat:wght@400;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+:root {
+  --bg-canopy: #08120A;
+  --glass-surface: rgba(16, 28, 19, 0.68);
+  --glass-border: rgba(212, 201, 168, 0.14);
+  --glass-highlight: rgba(212, 201, 168, 0.06);
+  --text-sand: #F2ECE1;
+  --text-sage: #8FA893;
+  --text-muted: rgba(242, 236, 225, 0.35);
+  --accent-idle: #A3B18A;
+  --accent-sand-idle: #EAE0D5;
+  --accent-sage: #74A884;
+  --accent-cyan: #56C7A5;
+  --accent-ochre: #E09F3E;
+  --accent-amber: #F0B940;
+  --accent-terracotta: #D97F6C;
+  --accent-rose: #E8957A;
+  --radius-pill: 999px;
+  --radius-card: 20px;
+  --radius-dock: 28px;
+  --blur-glass: blur(22px);
+  --transition-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --state-color: #A3B18A;
+  --state-glow: rgba(163, 177, 138, 0.25);
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  width: 100%; height: 100%;
+  overflow: hidden;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  background: var(--bg-canopy);
+  color: var(--text-sand);
+  -webkit-font-smoothing: antialiased;
+}
+#bg-layer { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+.bg-spot { position: absolute; border-radius: 50%; filter: blur(120px); transition: background 2.4s, opacity 2.4s; }
+.bg-spot-1 { width: 700px; height: 700px; top: -200px; left: -150px; background: rgba(134,167,137,0.12); opacity: 0.7; }
+.bg-spot-2 { width: 500px; height: 500px; bottom: -100px; right: -100px; background: rgba(163,177,138,0.08); opacity: 0.5; }
+.bg-spot-3 { width: 400px; height: 400px; top: 50%; left: 50%; transform: translate(-50%,-50%); background: rgba(74,168,132,0.06); opacity: 0.6; }
+#grain-overlay { position: fixed; inset: 0; z-index: 1; pointer-events: none; opacity: 0.035; }
+#three-canvas { position: fixed; inset: 0; z-index: 2; pointer-events: none; }
+#app {
+  position: relative; z-index: 10;
+  width: 100%; height: 100vh;
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  grid-template-rows: auto 1fr auto;
+  grid-template-areas: "pill pill" "ledger stage" "dock dock";
+  padding: 18px 20px 20px;
+  overflow: hidden;
+}
+#status-pill-wrap {
+  grid-area: pill;
+  display: flex; justify-content: center; align-items: flex-start;
+  padding-bottom: 14px; position: relative; z-index: 20;
+}
+.vine-accent { position: absolute; top: 50%; transform: translateY(-50%); opacity: 0.28; pointer-events: none; transition: opacity 0.6s; }
+.vine-accent.vine-left { right: calc(50% + 170px); }
+.vine-accent.vine-right { left: calc(50% + 170px); transform: translateY(-50%) scaleX(-1); }
+#status-pill {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 20px 8px 14px;
+  background: var(--glass-surface);
+  backdrop-filter: var(--blur-glass); -webkit-backdrop-filter: var(--blur-glass);
+  border: 1px solid var(--glass-border); border-top-color: rgba(212,201,168,0.22);
+  border-radius: 999px;
+  box-shadow: 0 2px 24px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.02) inset;
+  position: relative; overflow: hidden;
+}
+#status-pill::before {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.04) 0%, transparent 60%);
+  border-radius: inherit; pointer-events: none;
+}
+.spore-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--state-color); box-shadow: 0 0 10px var(--state-color), 0 0 20px var(--state-color);
+  transition: background 0.8s, box-shadow 0.8s; flex-shrink: 0;
+  animation: spore-pulse 2.4s ease-in-out infinite;
+}
+@keyframes spore-pulse { 0%,100%{transform:scale(1);opacity:1} 50%{transform:scale(1.4);opacity:0.7} }
+#state-label { font-family: 'Fraunces', serif; font-size: 13px; font-style: italic; font-weight: 300; color: var(--text-sand); letter-spacing: 0.03em; white-space: nowrap; transition: color 0.8s; }
+.pill-sep { width: 1px; height: 14px; background: rgba(212,201,168,0.2); flex-shrink: 0; }
+.pill-eq { display: flex; align-items: flex-end; gap: 2px; height: 16px; }
+.eq-bar { width: 3px; background: var(--state-color); border-radius: 2px; transition: background 0.8s; transform-origin: bottom; animation: eq-dance 1.4s ease-in-out infinite; }
+.eq-bar:nth-child(1){animation-delay:0s;animation-duration:1.1s}
+.eq-bar:nth-child(2){animation-delay:0.15s;animation-duration:1.3s}
+.eq-bar:nth-child(3){animation-delay:0.3s;animation-duration:0.9s}
+.eq-bar:nth-child(4){animation-delay:0.1s;animation-duration:1.5s}
+.eq-bar:nth-child(5){animation-delay:0.25s;animation-duration:1.2s}
+@keyframes eq-dance { 0%,100%{height:4px;opacity:0.4} 50%{height:14px;opacity:1} }
+.pill-telemetry { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-sage); letter-spacing: 0.04em; white-space: nowrap; }
+#ledger-panel {
+  grid-area: ledger; display: flex; flex-direction: column;
+  background: var(--glass-surface); backdrop-filter: var(--blur-glass); -webkit-backdrop-filter: var(--blur-glass);
+  border: 1px solid var(--glass-border); border-top-color: rgba(212,201,168,0.18);
+  border-radius: 20px; overflow: hidden; margin-right: 12px; position: relative;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.02) inset;
+}
+#ledger-panel::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent, rgba(212,201,168,0.3), transparent); pointer-events: none; }
+.ledger-header { padding: 16px 20px 12px; border-bottom: 1px solid rgba(212,201,168,0.08); display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.ledger-title { font-family: 'Fraunces', serif; font-size: 15px; font-style: italic; font-weight: 400; color: var(--text-sand); letter-spacing: 0.02em; }
+.ledger-icon { color: var(--text-sage); flex-shrink: 0; }
+.ledger-scroll-wrap { flex: 1; position: relative; overflow: hidden; }
+.ledger-scroll-wrap::before,.ledger-scroll-wrap::after { content: ''; position: absolute; left: 0; right: 0; height: 60px; z-index: 5; pointer-events: none; }
+.ledger-scroll-wrap::before { top: 0; background: linear-gradient(to bottom, rgba(16,28,19,0.9) 0%, transparent 100%); }
+.ledger-scroll-wrap::after { bottom: 0; background: linear-gradient(to top, rgba(16,28,19,0.9) 0%, transparent 100%); }
+#ledger-messages { height: 100%; overflow-y: auto; padding: 20px 20px 30px; display: flex; flex-direction: column; gap: 0; scroll-behavior: smooth; }
+#ledger-messages::-webkit-scrollbar { width: 3px; }
+#ledger-messages::-webkit-scrollbar-track { background: transparent; }
+#ledger-messages::-webkit-scrollbar-thumb { background: rgba(212,201,168,0.15); border-radius: 2px; }
+.msg-group { display: flex; flex-direction: column; gap: 6px; padding: 14px 0; border-bottom: 1px solid rgba(212,201,168,0.06); animation: msg-appear 0.5s cubic-bezier(0.34,1.56,0.64,1) both; }
+.msg-group:last-child { border-bottom: none; }
+@keyframes msg-appear { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+.msg-meta { display: flex; align-items: center; gap: 8px; }
+.msg-speaker { font-family: 'Fraunces', serif; font-size: 11px; font-weight: 600; font-style: italic; text-transform: lowercase; letter-spacing: 0.06em; }
+.msg-speaker.user { color: var(--accent-sage); }
+.msg-speaker.ai { color: var(--accent-ochre); }
+.msg-time { font-family: 'Caveat', cursive; font-size: 12px; color: var(--text-muted); }
+.msg-divider { flex: 1; height: 1px; background: linear-gradient(90deg, rgba(212,201,168,0.12), transparent); }
+.msg-text { font-family: 'Plus Jakarta Sans', sans-serif; font-size: 13.5px; line-height: 1.65; color: var(--text-sand); font-weight: 400; transition: filter 0.4s, opacity 0.4s; }
+.msg-text.ghost { color: var(--text-sage); filter: blur(1.5px); opacity: 0.55; font-style: italic; }
+.msg-text.streaming::after { content: '▋'; display: inline-block; animation: blink-cursor 0.9s step-end infinite; color: var(--accent-ochre); font-size: 11px; margin-left: 2px; vertical-align: middle; }
+@keyframes blink-cursor { 0%,100%{opacity:1} 50%{opacity:0} }
+.botanical-divider { display: flex; align-items: center; gap: 10px; padding: 8px 0; opacity: 0.3; }
+.botanical-divider-line { flex: 1; height: 1px; background: linear-gradient(90deg, transparent, rgba(163,177,138,0.5), transparent); }
+.botanical-divider-icon { color: #A3B18A; font-size: 12px; }
+#center-stage { grid-area: stage; display: flex; align-items: center; justify-content: center; position: relative; pointer-events: none; }
+.stage-label { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); font-family: 'Caveat', cursive; font-size: 14px; color: var(--text-muted); letter-spacing: 0.06em; white-space: nowrap; transition: color 1.2s; }
+#dock-area { grid-area: dock; display: flex; justify-content: center; align-items: flex-end; padding-top: 14px; z-index: 20; }
+#command-dock {
+  display: flex; flex-direction: column; gap: 10px; padding: 16px 20px;
+  background: var(--glass-surface); backdrop-filter: var(--blur-glass); -webkit-backdrop-filter: var(--blur-glass);
+  border: 1px solid var(--glass-border); border-top-color: rgba(212,201,168,0.22);
+  border-radius: 28px; box-shadow: 0 -4px 40px rgba(0,0,0,0.4), 0 8px 30px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.02) inset;
+  width: min(780px, 96vw); position: relative; overflow: hidden;
+}
+#command-dock::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent 0%, rgba(212,201,168,0.35) 40%, rgba(212,201,168,0.35) 60%, transparent 100%); }
+#leaf-vein-wrap { width: 100%; height: 36px; position: relative; flex-shrink: 0; }
+#leaf-vein-canvas { width: 100%; height: 100%; display: block; }
+.dock-input-row { display: flex; align-items: center; gap: 12px; }
+#mic-btn {
+  width: 52px; height: 52px; border-radius: 50%;
+  border: 1.5px solid rgba(212,201,168,0.25); background: rgba(16,28,19,0.9);
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; position: relative; outline: none;
+  transition: border-color 0.6s, background 0.6s, box-shadow 0.6s, transform 0.2s cubic-bezier(0.34,1.56,0.64,1);
+}
+#mic-btn:hover { transform: scale(1.06); }
+#mic-btn:active { transform: scale(0.95); }
+#mic-btn.active { border-color: var(--accent-sage); background: rgba(116,168,132,0.15); box-shadow: 0 0 0 8px rgba(116,168,132,0.12), 0 0 30px rgba(116,168,132,0.2); animation: mic-pulse 1.8s ease-in-out infinite; }
+@keyframes mic-pulse { 0%,100%{box-shadow:0 0 0 6px rgba(116,168,132,0.12),0 0 30px rgba(116,168,132,0.2)} 50%{box-shadow:0 0 0 14px rgba(116,168,132,0.05),0 0 40px rgba(116,168,132,0.3)} }
+#mic-btn i { color: var(--text-sand); transition: color 0.4s; }
+#mic-btn.active i { color: var(--accent-sage); }
+.mic-ring { position: absolute; inset: -6px; border-radius: 50%; border: 1px solid rgba(116,168,132,0.4); animation: ring-expand 2s ease-out infinite; opacity: 0; pointer-events: none; }
+.mic-ring:nth-child(2){animation-delay:0.6s}
+.mic-ring:nth-child(3){animation-delay:1.2s}
+@keyframes ring-expand { 0%{transform:scale(1);opacity:0.5} 100%{transform:scale(2.2);opacity:0} }
+.mic-rings { display: none; }
+#mic-btn.active .mic-rings { display: contents; }
+#text-input { flex: 1; height: 44px; background: rgba(255,255,255,0.04); border: 1px solid rgba(212,201,168,0.12); border-radius: 14px; padding: 0 16px; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 13.5px; color: var(--text-sand); outline: none; transition: border-color 0.3s, background 0.3s; }
+#text-input::placeholder { color: var(--text-muted); }
+#text-input:focus { border-color: rgba(212,201,168,0.28); background: rgba(255,255,255,0.06); }
+#send-btn { width: 44px; height: 44px; border-radius: 12px; border: 1px solid rgba(212,201,168,0.18); background: rgba(255,255,255,0.04); cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--text-sage); transition: background 0.3s, border-color 0.3s, color 0.3s, transform 0.15s; outline: none; }
+#send-btn:hover { background: rgba(116,168,132,0.15); border-color: rgba(116,168,132,0.35); color: var(--accent-sage); transform: scale(1.05); }
+.dock-toggles { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.toggle-pill { display: flex; align-items: center; gap: 5px; padding: 5px 12px; border-radius: 999px; border: 1px solid rgba(212,201,168,0.14); background: rgba(255,255,255,0.03); font-family: 'Plus Jakarta Sans', sans-serif; font-size: 11px; font-weight: 500; color: var(--text-sage); cursor: pointer; transition: all 0.25s; outline: none; letter-spacing: 0.02em; user-select: none; }
+.toggle-pill:hover { background: rgba(255,255,255,0.07); border-color: rgba(212,201,168,0.25); color: var(--text-sand); }
+.toggle-pill.active { background: rgba(116,168,132,0.15); border-color: rgba(116,168,132,0.4); color: var(--accent-sage); }
+.toggle-pill i { width: 12px; height: 12px; }
+.spacer { flex: 1; }
+.dock-hint { font-family: 'JetBrains Mono', monospace; font-size: 9.5px; color: var(--text-muted); letter-spacing: 0.04em; }
+#dev-hud { position: fixed; bottom: 24px; right: 20px; z-index: 100; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+#hud-toggle-btn { display: flex; align-items: center; gap: 6px; padding: 7px 13px; border-radius: 999px; border: 1px solid rgba(212,201,168,0.18); background: rgba(16,28,19,0.8); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); color: var(--text-sage); font-family: 'JetBrains Mono', monospace; font-size: 10px; cursor: pointer; letter-spacing: 0.05em; transition: all 0.2s; outline: none; }
+#hud-toggle-btn:hover { border-color: rgba(212,201,168,0.32); color: var(--text-sand); }
+#hud-panel { display: flex; flex-direction: column; gap: 6px; padding: 14px 16px; background: rgba(12,22,14,0.88); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid var(--glass-border); border-top-color: rgba(212,201,168,0.2); border-radius: 20px; box-shadow: 0 8px 32px rgba(0,0,0,0.5); min-width: 200px; transform-origin: bottom right; transition: opacity 0.25s, transform 0.3s cubic-bezier(0.34,1.56,0.64,1); }
+#hud-panel.hidden { opacity: 0; transform: scale(0.9) translateY(10px); pointer-events: none; }
+.hud-title { font-family: 'JetBrains Mono', monospace; font-size: 9.5px; color: var(--text-muted); letter-spacing: 0.08em; text-transform: uppercase; padding-bottom: 8px; border-bottom: 1px solid rgba(212,201,168,0.08); margin-bottom: 2px; }
+.hud-btn { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 10px; border: 1px solid rgba(212,201,168,0.1); background: rgba(255,255,255,0.02); color: var(--text-sage); font-family: 'JetBrains Mono', monospace; font-size: 10.5px; cursor: pointer; letter-spacing: 0.04em; transition: all 0.2s; text-align: left; width: 100%; outline: none; }
+.hud-btn:hover { background: rgba(255,255,255,0.06); border-color: rgba(212,201,168,0.22); color: var(--text-sand); }
+.hud-btn.hud-idle   { --hud-col: #A3B18A; }
+.hud-btn.hud-listen { --hud-col: #74A884; }
+.hud-btn.hud-think  { --hud-col: #E09F3E; }
+.hud-btn.hud-speak  { --hud-col: #D97F6C; }
+.hud-btn.active { border-color: var(--hud-col); color: var(--text-sand); background: rgba(255,255,255,0.05); }
+.hud-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--hud-col); box-shadow: 0 0 8px var(--hud-col); flex-shrink: 0; }
+@media (max-width: 700px) {
+  #app { grid-template-columns: 1fr; grid-template-areas: "pill" "stage" "dock"; padding: 14px 12px 16px; }
+  #ledger-panel { display: none; }
+  #center-stage { min-height: 280px; }
+}
+</style>
+</head>
+<body>
+<svg id="grain-overlay" xmlns="http://www.w3.org/2000/svg">
+  <filter id="grain-filter" x="0%" y="0%" width="100%" height="100%">
+    <feTurbulence type="fractalNoise" baseFrequency="0.72" numOctaves="4" stitchTiles="stitch" />
+    <feColorMatrix type="saturate" values="0" />
+  </filter>
+  <rect width="100%" height="100%" filter="url(#grain-filter)" />
+</svg>
+<div id="bg-layer" aria-hidden="true">
+  <div class="bg-spot bg-spot-1"></div>
+  <div class="bg-spot bg-spot-2"></div>
+  <div class="bg-spot bg-spot-3"></div>
+</div>
+<canvas id="three-canvas" aria-hidden="true"></canvas>
+<main id="app">
+  <div id="status-pill-wrap">
+    <svg class="vine-accent vine-left" width="80" height="36" viewBox="0 0 80 36" fill="none">
+      <path d="M80 18 Q60 8 40 18 Q20 28 0 18" stroke="#A3B18A" stroke-width="1" fill="none"/>
+      <path d="M50 18 Q46 10 52 8" stroke="#A3B18A" stroke-width="0.8" fill="none"/>
+      <ellipse cx="54" cy="7" rx="4" ry="2.5" fill="#A3B18A" opacity="0.6" transform="rotate(-20 54 7)"/>
+      <path d="M30 18 Q34 26 28 28" stroke="#A3B18A" stroke-width="0.8" fill="none"/>
+      <ellipse cx="26" cy="29" rx="3.5" ry="2" fill="#A3B18A" opacity="0.5" transform="rotate(15 26 29)"/>
+    </svg>
+    <div id="status-pill" role="status" aria-live="polite">
+      <span class="spore-dot" id="spore-dot"></span>
+      <span id="state-label">IDLE // DORMANT</span>
+      <div class="pill-sep"></div>
+      <div class="pill-eq" aria-hidden="true">
+        <div class="eq-bar" style="height:6px"></div>
+        <div class="eq-bar" style="height:10px"></div>
+        <div class="eq-bar" style="height:14px"></div>
+        <div class="eq-bar" style="height:8px"></div>
+        <div class="eq-bar" style="height:5px"></div>
+      </div>
+      <div class="pill-sep"></div>
+      <span class="pill-telemetry" id="pill-telemetry">L: 38ms · 24kHz</span>
+    </div>
+    <svg class="vine-accent vine-right" width="80" height="36" viewBox="0 0 80 36" fill="none">
+      <path d="M80 18 Q60 8 40 18 Q20 28 0 18" stroke="#A3B18A" stroke-width="1" fill="none"/>
+      <path d="M50 18 Q46 10 52 8" stroke="#A3B18A" stroke-width="0.8" fill="none"/>
+      <ellipse cx="54" cy="7" rx="4" ry="2.5" fill="#A3B18A" opacity="0.6" transform="rotate(-20 54 7)"/>
+      <path d="M30 18 Q34 26 28 28" stroke="#A3B18A" stroke-width="0.8" fill="none"/>
+      <ellipse cx="26" cy="29" rx="3.5" ry="2" fill="#A3B18A" opacity="0.5" transform="rotate(15 26 29)"/>
+    </svg>
+  </div>
+  <aside id="ledger-panel" aria-label="Conversation Ledger">
+    <div class="ledger-header">
+      <i data-lucide="scroll-text" class="ledger-icon" size="14"></i>
+      <span class="ledger-title">field ledger</span>
+    </div>
+    <div class="ledger-scroll-wrap">
+      <div id="ledger-messages">
+        <div class="botanical-divider">
+          <div class="botanical-divider-line"></div>
+          <span class="botanical-divider-icon">✦</span>
+          <div class="botanical-divider-line"></div>
+        </div>
+      </div>
+    </div>
+  </aside>
+  <section id="center-stage" aria-label="Bioluminescent visualizer">
+    <span class="stage-label" id="stage-label">dormant spore · awaiting signal</span>
+  </section>
+  <footer id="dock-area">
+    <div id="command-dock" role="region" aria-label="Voice and text controls">
+      <div id="leaf-vein-wrap" aria-hidden="true">
+        <canvas id="leaf-vein-canvas"></canvas>
+      </div>
+      <div class="dock-input-row">
+        <button id="mic-btn" aria-label="Toggle microphone" title="Hold Space to speak">
+          <div class="mic-rings">
+            <div class="mic-ring"></div>
+            <div class="mic-ring"></div>
+            <div class="mic-ring"></div>
+          </div>
+          <i data-lucide="mic" size="20"></i>
+        </button>
+        <input id="text-input" type="text" placeholder="Inquire, or hold Spacebar to speak…" aria-label="Type your message" />
+        <button id="send-btn" aria-label="Send message">
+          <i data-lucide="send" size="16"></i>
+        </button>
+      </div>
+      <div class="dock-toggles">
+        <button class="toggle-pill" id="toggle-mic" aria-pressed="false">
+          <i data-lucide="radio" size="11"></i> Live Mic
+        </button>
+        <button class="toggle-pill" id="toggle-mute" aria-pressed="false">
+          <i data-lucide="volume-x" size="11"></i> Mute Voice
+        </button>
+        <button class="toggle-pill" id="toggle-clear" aria-pressed="false">
+          <i data-lucide="eraser" size="11"></i> Clear Ledger
+        </button>
+        <div class="spacer"></div>
+        <span class="dock-hint">SPACE = PTT</span>
+      </div>
+    </div>
+  </footer>
+</main>
+<div id="dev-hud" role="complementary" aria-label="Developer FSM controls">
+  <div id="hud-panel" aria-expanded="false">
+    <div class="hud-title">// FSM Controller</div>
+    <button class="hud-btn hud-idle active" data-state="IDLE">
+      <span class="hud-dot"></span> IDLE (Dormant)
+    </button>
+    <button class="hud-btn hud-listen" data-state="LISTENING">
+      <span class="hud-dot"></span> LISTEN (Sage / Mic)
+    </button>
+    <button class="hud-btn hud-think" data-state="THINKING">
+      <span class="hud-dot"></span> REFLECT (Amber)
+    </button>
+    <button class="hud-btn hud-speak" data-state="SPEAKING">
+      <span class="hud-dot"></span> VOICE (Terracotta)
+    </button>
+  </div>
+  <button id="hud-toggle-btn" aria-expanded="false" aria-controls="hud-panel">
+    <i data-lucide="terminal" size="11"></i> DEV HUD
+  </button>
+</div>
+<script>
+'use strict';
+lucide.createIcons();
+
+// ── FSM ──
+const STATES = {
+  IDLE:      { label:'IDLE // DORMANT',            stageLabel:'dormant spore · awaiting signal',       color:'#A3B18A', colorAlt:'#EAE0D5', glow:'rgba(163,177,138,0.25)' },
+  LISTENING: { label:'LISTENING // PHOTOSYNTHESIS', stageLabel:'photosynthesis · absorbing frequency',  color:'#74A884', colorAlt:'#56C7A5', glow:'rgba(116,168,132,0.3)'  },
+  THINKING:  { label:'THINKING // GERMINATING',    stageLabel:'germinating · synthesising response',   color:'#E09F3E', colorAlt:'#F0B940', glow:'rgba(224,159,62,0.3)'   },
+  SPEAKING:  { label:'SPEAKING // BLOOMING',       stageLabel:'blooming · releasing signal',           color:'#D97F6C', colorAlt:'#E8957A', glow:'rgba(217,127,108,0.3)'  },
+};
+let currentState = 'IDLE';
+
+function applyStateUI(name) {
+  const s = STATES[name]; if (!s) return;
+  document.documentElement.style.setProperty('--state-color', s.color);
+  document.documentElement.style.setProperty('--state-glow', s.glow);
+  const g = s.glow;
+  document.querySelector('.bg-spot-1').style.background = g;
+  document.querySelector('.bg-spot-2').style.background = g;
+  document.querySelector('.bg-spot-3').style.background = g;
+  document.getElementById('state-label').textContent = s.label;
+  document.getElementById('stage-label').textContent = s.stageLabel;
+  document.querySelectorAll('.hud-btn').forEach(b => b.classList.toggle('active', b.dataset.state === name));
+  const speed = name==='LISTENING'?'0.5s':name==='THINKING'?'0.3s':'1.4s';
+  document.querySelectorAll('.eq-bar').forEach(b => b.style.animationDuration = speed);
+}
+
+window.setBotState = function(name) {
+  name = name.toUpperCase();
+  if (!STATES[name]) { console.warn('[FSM] Unknown state:', name); return; }
+  currentState = name;
+  applyStateUI(name);
+  if (window._threeViz) window._threeViz.onStateChange(name);
+  if (name === 'THINKING') setTimeout(demoThinking, 600);
+  else if (name === 'LISTENING') window.pushTranscript('user', '…voice signal incoming…', false);
+};
+applyStateUI('IDLE');
+
+// ── TRANSCRIPT ──
+const ledger = document.getElementById('ledger-messages');
+let streamingEl = null;
+
+function getTime() {
+  const n = new Date();
+  const h = String(n.getHours()).padStart(2,'0'), m = String(n.getMinutes()).padStart(2,'0');
+  return `field note · ${h}:${m} ${n.getHours()<12?'am':'pm'}`;
+}
+
+window.pushTranscript = function(role, text, isFinal=true) {
+  if (!isFinal) {
+    if (!streamingEl) {
+      const g = document.createElement('div');
+      g.className = 'msg-group'; g.id = 'streaming-group';
+      g.innerHTML = `<div class="msg-meta"><span class="msg-speaker ${role}">${role==='user'?'you':'flora.ai'}</span><div class="msg-divider"></div><span class="msg-time">${getTime()}</span></div><p class="msg-text ghost streaming"></p>`;
+      ledger.appendChild(g);
+      streamingEl = g.querySelector('.msg-text');
+    }
+    streamingEl.textContent = text;
+    ledger.scrollTop = ledger.scrollHeight;
+    return;
+  }
+  if (streamingEl) {
+    streamingEl.classList.remove('ghost','streaming');
+    streamingEl.textContent = text;
+    streamingEl = null;
+  } else {
+    const g = document.createElement('div');
+    g.className = 'msg-group';
+    g.innerHTML = `<div class="msg-meta"><span class="msg-speaker ${role}">${role==='user'?'you':'flora.ai'}</span><div class="msg-divider"></div><span class="msg-time">${getTime()}</span></div><p class="msg-text"></p>`;
+    g.querySelector('.msg-text').textContent = text;
+    ledger.appendChild(g);
+  }
+  ledger.scrollTop = ledger.scrollHeight;
+};
+
+const demoResponses = [
+  "The mycelial network processes your inquiry. Light bends through the canopy — meaning emerges like dew on morning ferns. Each photon of thought is a spore finding fertile ground.",
+  "Within the germination chamber, your words are cross-referenced with organic pattern libraries. The mycorrhizal intelligence reflects: connection is the substrate of all knowing.",
+  "Bioluminescent pathways illuminate the answer. The forest remembers everything; it only needs a question to begin speaking.",
+  "Signal received through the root lattice. The spore-mind is translating your inquiry into photosynthetic meaning. Chlorophyll and code converge.",
+];
+let demoIdx = 0;
+
+function pushBotStream(text) {
+  const words = text.split(' ');
+  let i = 0, acc = '';
+  window.pushTranscript('ai', '', false);
+  const iv = setInterval(() => {
+    if (i >= words.length) {
+      clearInterval(iv);
+      window.pushTranscript('ai', acc, true);
+      window.setBotState('IDLE');
+      return;
+    }
+    acc += (i === 0 ? '' : ' ') + words[i++];
+    if (streamingEl) { streamingEl.textContent = acc; ledger.scrollTop = ledger.scrollHeight; }
+  }, 75);
+}
+
+function demoThinking() {
+  const r = demoResponses[demoIdx % demoResponses.length]; demoIdx++;
+  window.setBotState('SPEAKING');
+  pushBotStream(r);
+}
+
+// ── THREE.JS ──
+(function() {
+  const canvas = document.getElementById('three-canvas');
+  const renderer = new THREE.WebGLRenderer({canvas, antialias:true, alpha:true});
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setClearColor(0x000000, 0);
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 100);
+  camera.position.set(0, 0, 4.5);
+
+  const vShader = `
+    uniform float uTime; uniform float uAudio; uniform float uSpeed; uniform float uScale; uniform float uDistort;
+    varying vec3 vNormal; varying vec3 vPos; varying float vDisp;
+    float h(vec3 p){p=fract(p*0.318);p+=dot(p,p.yxz+31.4);return fract((p.x+p.y)*p.z);}
+    float sn(vec3 p){vec3 i=floor(p);vec3 f=fract(p);f=f*f*(3.0-2.0*f);return mix(mix(mix(h(i),h(i+vec3(1,0,0)),f.x),mix(h(i+vec3(0,1,0)),h(i+vec3(1,1,0)),f.x),f.y),mix(mix(h(i+vec3(0,0,1)),h(i+vec3(1,0,1)),f.x),mix(h(i+vec3(0,1,1)),h(i+vec3(1,1,1)),f.x),f.y),f.z);}
+    float fbm(vec3 p){float v=0.0;float a=0.5;for(int i=0;i<5;i++){v+=sn(p)*a;p*=2.02;a*=0.5;}return v;}
+    void main(){
+      vec3 pos=position; float t=uTime*uSpeed;
+      float d=fbm(pos*uScale+vec3(t*0.3,t*0.2,t*0.15));
+      d+=fbm(pos*uScale*1.8-vec3(t*0.2,t*0.35,t*0.1))*0.5;
+      d=(d-0.5)*uDistort;
+      d+=uAudio*0.8*fbm(pos*3.0+vec3(t));
+      vec3 dp=pos+normal*(d+0.03*sin(t*2.0+pos.y*3.0));
+      vDisp=d; vNormal=normalize(normalMatrix*normal); vPos=dp;
+      gl_Position=projectionMatrix*modelViewMatrix*vec4(dp,1.0);
+    }
+  `;
+  const fShader = `
+    uniform vec3 uCA; uniform vec3 uCB; uniform vec3 uCC; uniform float uTime; uniform float uFresnel; uniform float uGlow;
+    varying vec3 vNormal; varying vec3 vPos; varying float vDisp;
+    void main(){
+      vec3 vd=normalize(cameraPosition-vPos);
+      float fr=pow(1.0-max(dot(vNormal,vd),0.0),3.0);
+      fr=clamp(fr*uFresnel,0.0,1.0);
+      float t=uTime*0.12;
+      float b=clamp(vDisp*2.5+0.5+sin(t+vPos.y)*0.3,0.0,1.0);
+      float b2=clamp(sin(vPos.x*2.0+t*1.4)*0.5+0.5,0.0,1.0);
+      vec3 col=mix(uCA,uCB,b); col=mix(col,uCC,b2*0.4);
+      float ig=pow(clamp(1.0-fr,0.0,1.0),2.0)*uGlow;
+      col=mix(col,uCC,fr*0.7); col+=uCB*ig*0.35;
+      float alpha=clamp(0.08+fr*0.75+ig*0.4,0.0,1.0);
+      gl_FragColor=vec4(col,alpha);
+    }
+  `;
+
+  const SC = {
+    IDLE:      {a:new THREE.Color('#A3B18A'),b:new THREE.Color('#EAE0D5'),c:new THREE.Color('#7A9E6F'),sp:0.22,sc:1.2,d:0.28,fr:2.2,gl:0.5},
+    LISTENING: {a:new THREE.Color('#74A884'),b:new THREE.Color('#56C7A5'),c:new THREE.Color('#3D8B72'),sp:0.6, sc:2.0,d:0.52,fr:2.8,gl:0.75},
+    THINKING:  {a:new THREE.Color('#E09F3E'),b:new THREE.Color('#F0B940'),c:new THREE.Color('#C87D20'),sp:1.1, sc:2.8,d:0.65,fr:3.2,gl:0.9},
+    SPEAKING:  {a:new THREE.Color('#D97F6C'),b:new THREE.Color('#E8957A'),c:new THREE.Color('#F0A882'),sp:0.75,sc:1.7,d:0.45,fr:2.5,gl:0.8},
+  };
+
+  const uni = {
+    uTime:{value:0}, uAudio:{value:0},
+    uSpeed:{value:0.22}, uScale:{value:1.2}, uDistort:{value:0.28},
+    uCA:{value:new THREE.Color('#A3B18A')}, uCB:{value:new THREE.Color('#EAE0D5')}, uCC:{value:new THREE.Color('#7A9E6F')},
+    uFresnel:{value:2.2}, uGlow:{value:0.5}, cameraPosition:{value:camera.position},
+  };
+  const tgt = {a:new THREE.Color('#A3B18A'),b:new THREE.Color('#EAE0D5'),c:new THREE.Color('#7A9E6F'),sp:0.22,sc:1.2,d:0.28,fr:2.2,gl:0.5};
+
+  const mat = new THREE.ShaderMaterial({vertexShader:vShader,fragmentShader:fShader,uniforms:uni,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide});
+  const mesh = new THREE.Mesh(new THREE.SphereGeometry(1.05,128,128), mat);
+  scene.add(mesh);
+
+  // Inner glow
+  const iMat = new THREE.ShaderMaterial({
+    vertexShader:`uniform float uTime;uniform float uSpeed;uniform float uDistort;varying vec3 vNormal;varying vec3 vPos;float h(vec3 p){p=fract(p*0.318);p+=dot(p,p.yxz+31.4);return fract((p.x+p.y)*p.z);}float sn(vec3 p){vec3 i=floor(p);vec3 f=fract(p);f=f*f*(3.0-2.0*f);return mix(mix(mix(h(i),h(i+vec3(1,0,0)),f.x),mix(h(i+vec3(0,1,0)),h(i+vec3(1,1,0)),f.x),f.y),mix(mix(h(i+vec3(0,0,1)),h(i+vec3(1,0,1)),f.x),mix(h(i+vec3(0,1,1)),h(i+vec3(1,1,1)),f.x),f.y),f.z);}void main(){float t=uTime*uSpeed*0.5;float d=(sn(position*2.0+vec3(t))-0.5)*uDistort*0.5;vec3 pos=position+normal*d;vNormal=normalize(normalMatrix*normal);vPos=pos;gl_Position=projectionMatrix*modelViewMatrix*vec4(pos,1.0);}`,
+    fragmentShader:`uniform vec3 uCB;uniform float uGlow;varying vec3 vNormal;varying vec3 vPos;void main(){vec3 vd=normalize(cameraPosition-vPos);float fr=pow(1.0-max(dot(vNormal,vd),0.0),2.0);gl_FragColor=vec4(uCB,fr*uGlow*0.4);}`,
+    uniforms:{uTime:uni.uTime,uSpeed:uni.uSpeed,uDistort:uni.uDistort,uCB:uni.uCB,uGlow:uni.uGlow,cameraPosition:{value:camera.position}},
+    transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.BackSide,
+  });
+  scene.add(new THREE.Mesh(new THREE.SphereGeometry(0.7,64,64), iMat));
+
+  // Particles
+  const N=280, pos=new Float32Array(N*3), seeds=new Float32Array(N*3);
+  for(let i=0;i<N;i++){const th=Math.random()*Math.PI*2,ph=Math.acos(2*Math.random()-1),r=1.3+Math.random()*1.1;pos[i*3]=r*Math.sin(ph)*Math.cos(th);pos[i*3+1]=r*Math.sin(ph)*Math.sin(th);pos[i*3+2]=r*Math.cos(ph);seeds[i*3]=Math.random()*10;seeds[i*3+1]=Math.random()*10;seeds[i*3+2]=Math.random()*10;}
+  const pGeo = new THREE.BufferGeometry();
+  pGeo.setAttribute('position', new THREE.BufferAttribute(pos,3));
+  pGeo.setAttribute('seed', new THREE.BufferAttribute(seeds,3));
+  const pMat = new THREE.ShaderMaterial({
+    vertexShader:`attribute vec3 seed;uniform float uTime;uniform float uSpeed;uniform float uGlow;varying float vA;void main(){float t=uTime*uSpeed*0.3;vec3 p=position;p.x+=sin(t+seed.x)*0.18;p.y+=cos(t*0.7+seed.y)*0.18;p.z+=sin(t*0.5+seed.z)*0.12;vA=0.3+0.5*sin(t+seed.x*3.14);gl_PointSize=(2.0+uGlow*2.0)*(1.0+0.5*vA);gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.0);}`,
+    fragmentShader:`uniform vec3 uCA;varying float vA;void main(){float d=length(gl_PointCoord-0.5);if(d>0.5)discard;gl_FragColor=vec4(uCA,(1.0-d*2.0)*vA*0.6);}`,
+    uniforms:{uTime:uni.uTime,uSpeed:uni.uSpeed,uGlow:uni.uGlow,uCA:uni.uCA},
+    transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,
+  });
+  const pts = new THREE.Points(pGeo, pMat);
+  scene.add(pts);
+
+  let audioLevel=0, t=0;
+  function animate(){
+    requestAnimationFrame(animate); t+=0.016;
+    uni.uTime.value=t;
+    const lf=0.035;
+    uni.uCA.value.lerp(tgt.a,lf); uni.uCB.value.lerp(tgt.b,lf); uni.uCC.value.lerp(tgt.c,lf);
+    uni.uSpeed.value+=(tgt.sp-uni.uSpeed.value)*lf;
+    uni.uScale.value+=(tgt.sc-uni.uScale.value)*lf;
+    uni.uDistort.value+=(tgt.d-uni.uDistort.value)*lf;
+    uni.uFresnel.value+=(tgt.fr-uni.uFresnel.value)*lf;
+    uni.uGlow.value+=(tgt.gl-uni.uGlow.value)*lf;
+    uni.uAudio.value+=(audioLevel-uni.uAudio.value)*0.15;
+    mesh.rotation.y=t*0.06; mesh.rotation.x=Math.sin(t*0.04)*0.18;
+    pts.rotation.y=-t*0.04;
+    renderer.render(scene,camera);
+  }
+  animate();
+
+  window.addEventListener('resize',()=>{renderer.setSize(window.innerWidth,window.innerHeight);camera.aspect=window.innerWidth/window.innerHeight;camera.updateProjectionMatrix();});
+
+  window._threeViz = {
+    onStateChange(name){const sc=SC[name];if(!sc)return;tgt.a.copy(sc.a);tgt.b.copy(sc.b);tgt.c.copy(sc.c);tgt.sp=sc.sp;tgt.sc=sc.sc;tgt.d=sc.d;tgt.fr=sc.fr;tgt.gl=sc.gl;},
+    setAudioLevel(v){audioLevel=v;}
+  };
+  window._threeViz.onStateChange('IDLE');
+})();
+
+// ── LEAF VEIN VISUALIZER ──
+(function(){
+  const canvas=document.getElementById('leaf-vein-canvas');
+  const ctx=canvas.getContext('2d');
+  let analyser=null,dataArr=null;
+  function resize(){const r=canvas.parentElement.getBoundingClientRect();canvas.width=r.width*window.devicePixelRatio;canvas.height=r.height*window.devicePixelRatio;ctx.scale(window.devicePixelRatio,window.devicePixelRatio);}
+  resize(); window.addEventListener('resize',resize);
+  function draw(){
+    const w=canvas.width/window.devicePixelRatio, h=canvas.height/window.devicePixelRatio;
+    ctx.clearRect(0,0,w,h);
+    const col=getComputedStyle(document.documentElement).getPropertyValue('--state-color').trim()||'#74A884';
+    const n=analyser?Math.min(dataArr.length,80):60, bw=w/n, cy=h/2;
+    ctx.beginPath();ctx.moveTo(0,cy);ctx.lineTo(w,cy);ctx.strokeStyle=col+'22';ctx.lineWidth=1;ctx.stroke();
+    if(analyser)analyser.getByteFrequencyData(dataArr);
+    for(let i=0;i<n;i++){
+      const x=(i+0.5)*bw;
+      let val;
+      if(analyser&&dataArr){val=(dataArr[i]/255)*(h*0.44);}
+      else{const t=Date.now()/1000;val=Math.abs(Math.sin(t*2.1+i*0.22)*4+Math.sin(t*0.7+i*0.38)*2.5);}
+      const a=Math.min(val/15+0.2,0.9);
+      const isBr=i%5===0;
+      ctx.beginPath();ctx.moveTo(x,cy-val);ctx.lineTo(x,cy+val);
+      ctx.strokeStyle=col+Math.round(a*255).toString(16).padStart(2,'0');ctx.lineWidth=isBr?1.5:0.8;ctx.stroke();
+      if(isBr&&val>2){
+        const bl=val*0.55,ba=i%2===0?-Math.PI/4:Math.PI/4;
+        ctx.beginPath();ctx.moveTo(x,cy-val*0.5);ctx.lineTo(x+Math.cos(ba)*bl,cy-val*0.5+Math.sin(ba)*bl);ctx.strokeStyle=col+'55';ctx.lineWidth=0.7;ctx.stroke();
+        ctx.beginPath();ctx.moveTo(x,cy+val*0.5);ctx.lineTo(x+Math.cos(-ba)*bl,cy+val*0.5+Math.sin(-ba)*bl);ctx.stroke();
+      }
+    }
+    if(analyser&&dataArr){const avg=Array.from(dataArr).reduce((a,b)=>a+b,0)/dataArr.length/255;if(window._threeViz)window._threeViz.setAudioLevel(avg);}
+    requestAnimationFrame(draw);
+  }
+  draw();
+  window._leafViz={
+    setAnalyser(a,d){analyser=a;dataArr=d;},
+    clearAnalyser(){analyser=null;dataArr=null;if(window._threeViz)window._threeViz.setAudioLevel(0);}
+  };
+})();
+
+// ── MIC ──
+let audioCtx=null,micStream=null,micSource=null,micActive=false;
+async function startMic(){
+  try{
+    if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+    micStream=await navigator.mediaDevices.getUserMedia({audio:true,video:false});
+    micSource=audioCtx.createMediaStreamSource(micStream);
+    const a=audioCtx.createAnalyser();a.fftSize=256;a.smoothingTimeConstant=0.7;
+    micSource.connect(a);
+    window._leafViz.setAnalyser(a,new Uint8Array(a.frequencyBinCount));
+    micActive=true;
+    document.getElementById('mic-btn').classList.add('active');
+    document.getElementById('toggle-mic').classList.add('active');
+    window.setBotState('LISTENING');
+  }catch(e){
+    window.pushTranscript('ai','Microphone access denied. Use the DEV HUD to explore all states.',true);
+  }
+}
+function stopMic(){
+  if(micStream)micStream.getTracks().forEach(t=>t.stop());
+  if(micSource)micSource.disconnect();
+  micStream=null;micSource=null;micActive=false;
+  window._leafViz.clearAnalyser();
+  document.getElementById('mic-btn').classList.remove('active');
+  document.getElementById('toggle-mic').classList.remove('active');
+  if(currentState==='LISTENING')window.setBotState('IDLE');
+}
+
+// ── CONTROLS ──
+document.getElementById('mic-btn').addEventListener('click',()=>micActive?stopMic():startMic());
+document.getElementById('toggle-mic').addEventListener('click',()=>micActive?stopMic():startMic());
+let muteTTS=false;
+document.getElementById('toggle-mute').addEventListener('click',function(){muteTTS=!muteTTS;this.classList.toggle('active',muteTTS);});
+document.getElementById('toggle-clear').addEventListener('click',()=>{
+  ledger.innerHTML='<div class="botanical-divider"><div class="botanical-divider-line"></div><span class="botanical-divider-icon">✦</span><div class="botanical-divider-line"></div></div>';
+  streamingEl=null;
+});
+// ═══════════════════════════════════════════════════════
+// WEBSOCKET CLIENT — connects to FastAPI /ws backend
+// Falls back gracefully to demo mode if backend is offline
+// ═══════════════════════════════════════════════════════
+const WS_URL = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
+let ws = null;
+let wsReady = false;
+let wsReconnectTimer = null;
+const tel = document.getElementById('pill-telemetry');
+
+function wsConnect() {
+  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
+  try {
+    ws = new WebSocket(WS_URL);
+  } catch(e) {
+    enterDemoMode(); return;
+  }
+
+  ws.onopen = () => {
+    wsReady = true;
+    clearTimeout(wsReconnectTimer);
+    log('[WS] Connected to backend');
+  };
+
+  ws.onclose = () => {
+    wsReady = false;
+    log('[WS] Disconnected — demo mode active');
+    enterDemoMode();
+    // Attempt reconnect after 5s
+    wsReconnectTimer = setTimeout(wsConnect, 5000);
+  };
+
+  ws.onerror = () => {
+    wsReady = false;
+    enterDemoMode();
+  };
+
+  ws.onmessage = ({ data }) => {
+    let msg;
+    try { msg = JSON.parse(data); } catch(e) { return; }
+
+    switch (msg.type) {
+
+      case 'connected':
+        log('[WS] Session:', msg.session_id, '| Model:', msg.model);
+        window.pushTranscript('ai', msg.message || 'Flora online.', true);
+        break;
+
+      case 'fsm_state':
+        // Server-authoritative FSM — bypass local FSM, update visuals directly
+        applyStateUI(msg.state);
+        if (window._threeViz) window._threeViz.onStateChange(msg.state);
+        currentState = msg.state;
+        break;
+
+      case 'transcript':
+        window.pushTranscript(msg.role, msg.text, msg.isFinal);
+        break;
+
+      case 'tts_sentence':
+        // Hook point: feed msg.text to Web Speech API or a TTS service
+        if (!muteTTS && window.speechSynthesis) {
+          const utt = new SpeechSynthesisUtterance(msg.text);
+          utt.rate = 0.95; utt.pitch = 1.0;
+          window.speechSynthesis.speak(utt);
+        }
+        break;
+
+      case 'telemetry':
+        // Live latency from the server
+        tel.textContent = `L: ${msg.latency_ms}ms · ${msg.model || 'gemini'}`;
+        break;
+
+      case 'interrupt_ack':
+        log('[WS] Barge-in acknowledged');
+        break;
+
+      case 'history_cleared':
+        log('[WS] History cleared on server');
+        break;
+
+      case 'pong':
+        break;
+
+      case 'error':
+        log('[WS] Server error:', msg.message);
+        window.pushTranscript('ai', `⚠ ${msg.message}`, true);
+        break;
+
+      default:
+        log('[WS] Unknown message type:', msg.type);
+    }
+  };
+}
+
+function wsSend(payload) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify(payload));
+    return true;
+  }
+  return false;
+}
+
+// ── Demo mode (no backend) ───────────────────────────────
+let demoMode = false;
+function enterDemoMode() {
+  if (demoMode) return;
+  demoMode = true;
+}
+
+function log(...args) { console.log(...args); }
+
+// ── Send message (text input) ────────────────────────────
+function sendMsg() {
+  const inp = document.getElementById('text-input');
+  const txt = inp.value.trim();
+  if (!txt) return;
+  inp.value = '';
+
+  const sent = wsSend({ type: 'text_message', text: txt });
+
+  if (!sent) {
+    // Demo fallback
+    window.pushTranscript('user', txt, true);
+    window.setBotState('THINKING');
+  }
+}
+
+document.getElementById('send-btn').addEventListener('click', sendMsg);
+document.getElementById('text-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMsg(); }
+});
+
+// ── Spacebar PTT ─────────────────────────────────────────
+let spaceHeld = false;
+document.addEventListener('keydown', e => {
+  if (e.code === 'Space' && e.target === document.body && !spaceHeld) {
+    e.preventDefault(); spaceHeld = true;
+    if (!micActive) startMic();
+    wsSend({ type: 'speech_start' });
+  }
+});
+document.addEventListener('keyup', e => {
+  if (e.code === 'Space' && spaceHeld) {
+    spaceHeld = false;
+    if (micActive) {
+      stopMic();
+      setTimeout(() => {
+        if (!wsSend({ type: 'stt_final', text: '' })) window.setBotState('THINKING');
+      }, 300);
+    }
+  }
+});
+
+// ── Barge-in: interrupt if bot is speaking and mic starts ─
+const _origStartMic = startMic;
+async function startMicWithBargeIn() {
+  if (currentState === 'SPEAKING' || currentState === 'THINKING') {
+    wsSend({ type: 'interrupt' });
+  }
+  await _origStartMic();
+}
+// Override the mic button to use barge-in aware version
+document.getElementById('mic-btn').removeEventListener('click', ()=>{});
+document.getElementById('mic-btn').addEventListener('click', () => {
+  if (micActive) stopMic();
+  else startMicWithBargeIn();
+});
+document.getElementById('toggle-mic').addEventListener('click', () => {
+  if (micActive) stopMic();
+  else startMicWithBargeIn();
+});
+
+// ── DEV HUD ──────────────────────────────────────────────
+let hudOpen = false;
+const hudPanel = document.getElementById('hud-panel');
+hudPanel.classList.add('hidden');
+document.getElementById('hud-toggle-btn').addEventListener('click', () => {
+  hudOpen = !hudOpen;
+  hudPanel.classList.toggle('hidden', !hudOpen);
+});
+// HUD buttons: send set_state to backend or fall back to local demo
+document.querySelectorAll('.hud-btn').forEach(b => b.addEventListener('click', () => {
+  const state = b.dataset.state;
+  if (!state) return;
+  const sent = wsSend({ type: 'set_state', state });
+  if (!sent) window.setBotState(state); // demo fallback
+}));
+
+// ── Telemetry — local sim when backend is offline ────────
+setInterval(() => {
+  if (!wsReady) {
+    tel.textContent = `L: ${18 + Math.floor(Math.random() * 38)}ms · 24kHz`;
+  }
+}, 3000);
+
+// ── Clear Ledger also clears server history ───────────────
+document.getElementById('toggle-clear').addEventListener('click', () => {
+  ledger.innerHTML = '<div class="botanical-divider"><div class="botanical-divider-line"></div><span class="botanical-divider-icon">✦</span><div class="botanical-divider-line"></div></div>';
+  streamingEl = null;
+  wsSend({ type: 'clear_history' });
+});
+
+// ── Liveness ping every 30s ───────────────────────────────
+setInterval(() => wsSend({ type: 'ping' }), 30000);
+
+// ── INIT ─────────────────────────────────────────────────
+window.addEventListener('load', () => {
+  wsConnect(); // Attempt backend connection immediately
+
+  // Show welcome only in demo mode (backend sends its own 'connected' msg)
+  setTimeout(() => {
+    if (!wsReady) {
+      window.pushTranscript('ai', 'The mycelial network is awake (demo mode — start the backend for live AI). Type a message or hold Spacebar to speak.', true);
+      setTimeout(() => window.pushTranscript('ai', 'Open the DEV HUD (bottom-right) to explore all FSM state animations.', true), 1800);
+    }
+  }, 900);
+});
+
+lucide.createIcons();
+</script>
+</body>
+</html>
